@@ -1,0 +1,7 @@
+beautifulsoup4
+climage
+persiantools
+requests
+pytz
+dnspython
+pyinstaller
