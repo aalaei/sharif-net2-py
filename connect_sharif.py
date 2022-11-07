@@ -121,14 +121,14 @@ def check_bw(credentials):
         # d=soup.find('div', {'id':'legend'})
         script_element=soup.find_all('script')[-1].contents[0]
         remaining_data_raw=re.findall('باقی مانده\', value: [0-9]+\.[0-9]*', script_element)[0]
-        remaining_data=re.split(' ', remaining_data_raw)[-1] + ' GB'
+        remaining_data=re.split(' ', remaining_data_raw)[-1]
         t=JalaliDate.today()
         if t.day <= 10:
             remaining_days=(10-t.day)
         else:
             remaining_days=10+t.days_in_month(t.month, t.year)-t.day
 
-        print(f'You have {remaining_data} remaining data for {remaining_days} days.')
+        print(f'You have {remaining_data} GB remaining data for {remaining_days} days({float(remaining_data)/remaining_days:.2f}  GB per day).')
 
 def check_net_sharif_login(s):
     r3=s.get('https://net.sharif.edu/en-us/user/get_info_user/', verify=False, headers=net_headers)
@@ -240,7 +240,6 @@ def main():
     parser.add_argument("-x", "--Disconnect-All",action = "store_true" , help = "Disconnect from All Devices")
     
     args= parser.parse_args()
-    print(args)
     if args.Disconnect:
         args.Connect=False
         logout()
