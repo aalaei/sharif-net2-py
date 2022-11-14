@@ -1,4 +1,4 @@
-
+#! /bin/python3
 from bs4 import BeautifulSoup
 import requests
 import json
@@ -15,10 +15,26 @@ from urllib3.exceptions import InsecureRequestWarning
 from urllib3.util import connection
 import dns.resolver
 import argparse
+import socket
+import fcntl
+import struct
+
+def get_ip_address(ifname):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        return socket.inet_ntoa(fcntl.ioctl(
+            s.fileno(),
+            0x8915,  # SIOCGIFADDR
+            struct.pack('256s', ifname[:15])
+        )[20:24])
+    except:
+        return None
+
 
 
 net2_url='https://net2.sharif.edu/{}'
 bw_url='https://bw.ictc.sharif.edu/login'
+net_url='https://net.sharif.edu'
 net_headers = {
     'Referer': 'https://net.sharif.edu/',
     'Host': 'net.sharif.edu',
@@ -54,13 +70,22 @@ def patched_create_connection(address, *args, **kwargs):
 
     return _orig_create_connection((hostname, port), *args, **kwargs)
 
-def init_requests_session():
+def init_requests_session(addr:str='') -> requests.Session:
     connection.create_connection = patched_create_connection
 
     # Suppress only the single warning from urllib3 needed.
     requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
     s=requests.Session()
     s.verify=False
+    for prefix in ('http://', 'https://'):
+        s.get_adapter(prefix).init_poolmanager(
+            # those are default values from HTTPAdapter's constructor
+            connections=requests.adapters.DEFAULT_POOLSIZE,
+            maxsize=requests.adapters.DEFAULT_POOLSIZE,
+            # This should be a tuple of (address, port). Port 0 means auto-selection.
+            source_address=(addr, 0),
+        )
+
     return s
 
 def go_to_app_dir(config_file_name='pass.json'):
@@ -90,8 +115,8 @@ def get_config_credentials(config_file_name='pass.json'):
             json.dump(credentials, f)
     return credentials
 
-def login(credentials):
-    r=requests.get(net2_url.format('status'))
+def login(s, credentials):
+    r=s.get(net2_url.format('status'))
     if r.status_code!=200:
         print("Not connected!")
     else:
@@ -100,7 +125,7 @@ def login(credentials):
         if page_title=="logout":
             print("Already Connected!")
         else:
-            r2=requests.post(net2_url.format('login'), data=credentials)
+            r2=s.post(net2_url.format('login'), data=credentials)
             if r2.status_code!=200:
                 print("Not able to login!")
             else:
@@ -111,9 +136,10 @@ def login(credentials):
                 else:
                     print("Incorrect password")
 
-def check_bw(credentials):
+def check_bw(s, credentials):
     c={'normal_username': credentials['username'], 'normal_password': credentials['password']}
-    r=requests.post(bw_url, data=c)
+    r_=s.get(bw_url)
+    r=s.post(bw_url, data=c)
     if r.status_code!=200:
         print("Not connected!")
     else:
@@ -131,11 +157,19 @@ def check_bw(credentials):
         print(f'You have {remaining_data} GB remaining data for {remaining_days} days({float(remaining_data)/remaining_days:.2f}  GB per day).')
 
 def check_net_sharif_login(s):
-    r3=s.get('https://net.sharif.edu/en-us/user/get_info_user/', verify=False, headers=net_headers)
+    for prefix in ('http://', 'https://'):
+        s.get_adapter(prefix).init_poolmanager(
+            # those are default values from HTTPAdapter's constructor
+            connections=requests.adapters.DEFAULT_POOLSIZE,
+            maxsize=requests.adapters.DEFAULT_POOLSIZE,
+            # This should be a tuple of (address, port). Port 0 means auto-selection.
+            source_address=('172.27.210.8', 0),
+        )
+
+    r3=s.get(f'{net_url}/en-us/user/get_info_user/', verify=False, headers=net_headers)
     return len(r3.text)>0
 
-def net_sharif(credentials):
-    s = requests.Session()
+def net_sharif(s, credentials):
     cookie_file = 'somefile'
     new_login=True
     if os.path.isfile(cookie_file):
@@ -146,7 +180,7 @@ def net_sharif(credentials):
             new_login=True
     
     while new_login:
-        r=s.get('https://net.sharif.edu/en-us/', headers=net_headers, verify=False)
+        r=s.get(f'{net_url}/en-us/', headers=net_headers, verify=False)
         if r.status_code!=200:
             print("Not able to connect to net.sharif.edu!")
             return
@@ -162,7 +196,7 @@ def net_sharif(credentials):
         captcha_image_src=image_captha.attrs['src']
 
         file_name = 'captcha.png'
-        url_image=f'https://net.sharif.edu{captcha_image_src}'
+        url_image=f'{net_url}/{captcha_image_src}'
         # urllib.request.urlretrieve(url_image, file_name, verify)
         response = s.get(url_image, stream=True, verify=False)
         with open(file_name, 'wb') as out_file:
@@ -184,7 +218,7 @@ def net_sharif(credentials):
             'captcha_0': captcha_token,
             'captcha_1': captcha_text
         }
-        r2=s.post('https://net.sharif.edu/en-us/user/login/', data=c, verify=False, headers=net_headers)
+        r2=s.post(f'{net_url}/en-us/user/login/', data=c, verify=False, headers=net_headers)
         if r2.status_code!=200:
             print("Not able to login!")
             return
@@ -195,7 +229,7 @@ def net_sharif(credentials):
                 pickle.dump(s.cookies, f)
             new_login=False
     
-    r3=s.get('https://net.sharif.edu/en-us/user/get_info_user/', verify=False, headers=net_headers)
+    r3=s.get(f'{net_url}/en-us/user/get_info_user/', verify=False, headers=net_headers)
     users=json.loads(r3.text)
     profiles=[]
     user_id=0
@@ -212,46 +246,77 @@ def net_sharif(credentials):
         u_id=profile[2]
         date_time=profile[3]
         ip=profile[4]
-        url=f'https://net.sharif.edu/en-us/user/disconnect/?user_id={user_id}&ras={ras}&ip={ip}&u_id={u_id}'
+        url=f'{net_url}/en-us/user/disconnect/?user_id={user_id}&ras={ras}&ip={ip}&u_id={u_id}'
         s.get(url, verify=False, headers=net_headers)
 
-def logout():
-    r=requests.get(net2_url.format('logout'))
+def logout(s):
+    r=s.get(net2_url.format('logout'))
     if r.status_code!=200:
         print("Not connected!")
     else:
-        r2=requests.get(net2_url.format('logout'))
-        if r2.status_code!=200:
-            print("Not able to logout!")
-        else:
             print("Successfully disconnected :)")
 def help():
     print('\th\tHelp\n\tf\tForceLogin\n\tc\tCheck Account\n\td\tDisconnect(Logout)\n\tx\tDisconnect All Devices')
 
+def find_best_interface(interfaces_dict):
+    s=init_requests_session()
+    for i_name, i_ip in interfaces_dict.items():
+        if i_name=="lo" or i_name.startswith('docker'):
+            continue
+        for prefix in ('http://', 'https://'):
+            s.get_adapter(prefix).init_poolmanager(
+                # those are default values from HTTPAdapter's constructor
+                connections=requests.adapters.DEFAULT_POOLSIZE,
+                maxsize=requests.adapters.DEFAULT_POOLSIZE,
+                # This should be a tuple of (address, port). Port 0 means auto-selection.
+                source_address=(i_ip, 0),
+            )
+        r=s.get(net2_url.format('status'), timeout=1)
+        if r.status_code==200:
+            return i_name, i_ip
+
+
+
+        
 def main():
-    init_requests_session()
     credentials=get_config_credentials()
-    msg="sharif net2 script"
+    interfaces_dict={iname[1]: get_ip_address(iname[1].encode()) for iname in socket.if_nameindex()}
+    interfaces_dict={k: v for k, v in interfaces_dict.items() if v is not None}
+    interfaces_to_choose=list(interfaces_dict.keys())
+    interfaces_to_choose.insert(0,"Auto")
+    interfaces_to_choose.insert(1, "Smart")
+    msg="Sharif Net2 Script"
     parser = argparse.ArgumentParser(description = msg)
     parser.add_argument("-d", "--Disconnect", help = "Disconnect from net2", action = "store_true")
     parser.add_argument("-C", "--Connect", help = "Connect to your net2 account[Activated by Default]", default=True, action = "store_true")
     parser.add_argument("-c", "--Check", help = "Check Account Balance", action = "store_true")
     parser.add_argument("-f", "--ForceLogin", action = "store_true", help = "Force Login(Logout from all other devices and login this device")
     parser.add_argument("-x", "--Disconnect-All",action = "store_true" , help = "Disconnect from All Devices")
-    
+    parser.add_argument("-i", "--Interface", help = "Interface Name", default='Smart', choices=interfaces_to_choose)
+    parser.add_argument("-v", "--Verbose", help = "Verbose", action = "store_true")
     args= parser.parse_args()
+    
+    interface_ip = ''
+    if args.Interface=="Smart":
+        name, interface_ip = find_best_interface(interfaces_dict)
+        if args.Verbose:
+            print(f"Best Interface: {name}({interface_ip})")
+    elif args.Interface!="Auto":
+        interface_ip=interfaces_dict[args.Interface]
+
+    s=init_requests_session(interface_ip)
     if args.Disconnect:
         args.Connect=False
-        logout()
+        logout(s)
     elif args.Check:
-        check_bw(credentials)
+        check_bw(s,credentials)
     elif args.ForceLogin:
-        net_sharif(credentials)
-        login(credentials)
+        net_sharif(s,credentials)
+        login(s,credentials)
     elif args.Disconnect_All:
-        net_sharif(credentials)
+        net_sharif(s,credentials)
     elif args.Connect:
-        login(credentials)
+        login(s,credentials)
     else:
         help()
         time.sleep(1)
