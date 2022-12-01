@@ -15,21 +15,8 @@ from urllib3.exceptions import InsecureRequestWarning
 from urllib3.util import connection
 import dns.resolver
 import argparse
-import socket
-import fcntl
-import struct
-
-def get_ip_address(ifname):
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        return socket.inet_ntoa(fcntl.ioctl(
-            s.fileno(),
-            0x8915,  # SIOCGIFADDR
-            struct.pack('256s', ifname[:15])
-        )[20:24])
-    except:
-        return None
-
+import netifaces
+import stdiomask
 
 
 net2_url='https://net2.sharif.edu/{}'
@@ -108,8 +95,7 @@ def get_config_credentials(config_file_name='pass.json'):
     except FileNotFoundError:
         print('Credentials file not found. Please enter your username:')
         username = input()
-        print('Please enter your password:')
-        password = input()
+        password = stdiomask.getpass(prompt = 'Please enter your password: ')
         credentials = {'username': username, 'password': password}
         with open(config_file_name, 'w') as f:
             json.dump(credentials, f)
@@ -149,12 +135,14 @@ def check_bw(s, credentials):
         remaining_data_raw=re.findall('باقی مانده\', value: [0-9]+\.[0-9]*', script_element)[0]
         remaining_data=re.split(' ', remaining_data_raw)[-1]
         t=JalaliDate.today()
-        if t.day <= 10:
+        if t.day < 10:
             remaining_days=(10-t.day)
         else:
             remaining_days=10+t.days_in_month(t.month, t.year)-t.day
-
-        print(f'You have {remaining_data} GB remaining data for {remaining_days} days({float(remaining_data)/remaining_days:.2f}  GB per day).')
+        if remaining_days==0:
+            print(f'You have {remaining_data} GB remaining data from now to 23:59 PM')
+        else:
+            print(f'You have {remaining_data} GB remaining data for {remaining_days} days({float(remaining_data)/remaining_days:.2f}  GB per day).')
 
 def check_net_sharif_login(s):
     for prefix in ('http://', 'https://'):
@@ -280,8 +268,10 @@ def find_best_interface(interfaces_dict):
         
 def main():
     credentials=get_config_credentials()
-    interfaces_dict={iname[1]: get_ip_address(iname[1].encode()) for iname in socket.if_nameindex()}
-    interfaces_dict={k: v for k, v in interfaces_dict.items() if v is not None}
+    # interfaces_dict={iname[1]: get_ip_address(iname[1].encode()) for iname in socket.if_nameindex()}
+    
+    interfaces_dict={x:netifaces.ifaddresses(x).get(netifaces.AF_INET) for x in netifaces.interfaces()}
+    interfaces_dict={k: v[0]['addr'] for k, v in interfaces_dict.items() if v is not None}
     interfaces_to_choose=list(interfaces_dict.keys())
     interfaces_to_choose.insert(0,"Auto")
     interfaces_to_choose.insert(1, "Smart")

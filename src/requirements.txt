@@ -8,3 +8,5 @@ pyinstaller
 pywin32
 pypiwin32
 Pillow
+stdiomask
+netifaces

@@ -21,3 +21,5 @@ share/python-wheels/
 *.egg
 MANIFEST
 __pycache__/
+src/captcha.png
+src/somefile
