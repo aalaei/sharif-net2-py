@@ -56,11 +56,11 @@ def patched_create_connection(address, *args, **kwargs):
     # resolver here, as otherwise the system resolver will be used.
     host, port = address
     hostname = your_dns_resolver(host)
-    res=_orig_create_connection((hostname, port), *args, **kwargs)
-    return res
+
+    return _orig_create_connection((hostname, port), *args, **kwargs)
 
 def init_requests_session(addr:str='') -> requests.Session:
-    # connection.create_connection = patched_create_connection
+    connection.create_connection = patched_create_connection
 
     # Suppress only the single warning from urllib3 needed.
     requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
@@ -396,6 +396,7 @@ def main():
     parser.add_argument("-a", "--Account", help = "Select Account", default=next(iter(credentials)))
     parser.add_argument("-A", "--Add-New-Account", help = "Add new Account", action = "store_true")
     parser.add_argument("-l", "--List-Accounts", help = "List Accounts", action = "store_true")
+    
     args= parser.parse_args()
     
     interface_ip = ''
@@ -407,14 +408,15 @@ def main():
         interface_ip=interfaces_dict[args.Interface]
 
     s=init_requests_session(interface_ip)
-    if args.Verbose:
-        print(f"Using {args.Account} account")
+    
     
     # credentials=credentials[args.Account]
     account_match=list(credentials.keys())
     scores=[(account, fuzz.ratio(args.Account, account)) for account in account_match]
     scores.sort(key=lambda x: x[1], reverse=True)
     sorted_credentials=[name[0] for name in scores]
+    if args.Verbose:
+        print(f"Using {sorted_credentials[0]} account")
     credentials=credentials[sorted_credentials[0]]
     if args.List_Accounts:
         for ac in sorted_credentials:
