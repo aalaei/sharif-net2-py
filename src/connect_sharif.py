@@ -209,13 +209,13 @@ def check_bw(s, credentials):
                     
         username=user_info.get('نام کاربری', None)
         groupclass=user_info.get('گروه کاربری', '').replace(" ","")
-        for session_info in sessions_info:
-            login_time=session_info.get('زمان لاگین', None)
-            ip=session_info.get('آی پی', None)
-            should_disconnect=False
-            if should_disconnect:
-                r_dis=s.post(bw_url.replace("login", 'main'), data=session_info['form'])
-                print(r_dis)
+        # for session_info in sessions_info:
+        #     login_time=session_info.get('زمان لاگین', None)
+        #     ip=session_info.get('آی پی', None)
+        #     should_disconnect=False
+        #     if should_disconnect:
+        #         r_dis=s.post(bw_url.replace("login", 'main'), data=session_info['form'])
+        #         print(r_dis)
 
         remaining_data_raw=re.findall('باقی مانده\', value: [0-9]+\.[0-9]*', script_element)[0]
         remaining_data=re.split(' ', remaining_data_raw)[-1]
@@ -228,6 +228,15 @@ def check_bw(s, credentials):
             print(f'({username}) You have {remaining_data} GB remaining data from now to 23:59 PM')
         else:
             print(f'({username}) You have {remaining_data} GB remaining data for {remaining_days} days({float(remaining_data)/remaining_days:.2f}  GB per day).')
+        print("Details:")
+        print(f'''\tUsername: {username}\n\tClass: {groupclass}\n\t''')
+        print("Sessions:")
+        for i,session_info in enumerate(sessions_info, 1):
+            login_time=session_info.get('زمان لاگین', None)
+            ip=session_info.get('آی پی', None)
+            dict_params=session_info.get('form', None)
+            print(f"\t{i}- IP: {ip}, LogInTime: {login_time}, \n\t\t({dict_params})")
+            
 
 def check_net_sharif_login(s):
     for prefix in ('http://', 'https://'):
