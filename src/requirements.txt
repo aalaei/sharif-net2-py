@@ -9,4 +9,5 @@ pywin32
 pypiwin32
 Pillow
 stdiomask
-netifaces
+ifaddr
+rapidfuzz

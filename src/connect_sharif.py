@@ -15,10 +15,12 @@ from urllib3.exceptions import InsecureRequestWarning
 from urllib3.util import connection
 import dns.resolver
 import argparse
-import netifaces
+# import ifaddr
+# import netifaces
 import stdiomask
+import ifcfg
 
-
+from rapidfuzz import fuzz
 net2_url='https://net2.sharif.edu/{}'
 bw_url='https://bw.ictc.sharif.edu/login'
 net_url='https://net.sharif.edu'
@@ -54,11 +56,11 @@ def patched_create_connection(address, *args, **kwargs):
     # resolver here, as otherwise the system resolver will be used.
     host, port = address
     hostname = your_dns_resolver(host)
-
-    return _orig_create_connection((hostname, port), *args, **kwargs)
+    res=_orig_create_connection((hostname, port), *args, **kwargs)
+    return res
 
 def init_requests_session(addr:str='') -> requests.Session:
-    connection.create_connection = patched_create_connection
+    # connection.create_connection = patched_create_connection
 
     # Suppress only the single warning from urllib3 needed.
     requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
@@ -93,12 +95,31 @@ def get_config_credentials(config_file_name='pass.json'):
             file_content=f.read()
             credentials = json.loads(file_content)
     except FileNotFoundError:
-        print('Credentials file not found. Please enter your username:')
-        username = input()
-        password = stdiomask.getpass(prompt = 'Please enter your password: ')
-        credentials = {'username': username, 'password': password}
+        print('Credentials file not found.')
+        username, password=get_user_pass_from_input()
+        credentials = {username: {'username': username, 'password': password}}
         with open(config_file_name, 'w') as f:
             json.dump(credentials, f)
+    return credentials
+
+def get_user_pass_from_input():
+    username = input("Please enter your username: ")
+    password = stdiomask.getpass(prompt = 'Please enter your password: ')
+    return username, password
+
+def append_new_user(config_file_name='pass.json', _user=None, _pass=None):
+    if _user is None and _pass is None:
+        _user, _pass = get_user_pass_from_input()
+    credentials=None
+    try:
+        with open(config_file_name, 'r') as f:
+            file_content=f.read()
+            credentials = json.loads(file_content)
+            credentials[_user] = {'username': _user, 'password': _pass}
+            with open(config_file_name, 'w') as f2:
+                json.dump(credentials, f2)
+    except:
+        print("append failed!")
     return credentials
 
 def login(s, credentials):
@@ -107,9 +128,20 @@ def login(s, credentials):
         print("Not connected!")
     else:
         soup = BeautifulSoup(r.text, 'html.parser')
+        try:
+            table_info=soup.find_all('table')[1]
+        except:
+            table_info=None
+        dict_info={}
+        if table_info is not None:
+            for tr in table_info.find_all('tr'):
+                tds=tr.find_all('td')
+                dict_info[tds[0].getText().replace(":", "")]=tds[1].getText()
         page_title=soup.title.contents[0]
         if page_title=="logout":
             print("Already Connected!")
+            for info, info_val in dict_info.items():
+                print(f'{info}: {info_val}')
         else:
             r2=s.post(net2_url.format('login'), data=credentials)
             if r2.status_code!=200:
@@ -131,7 +163,60 @@ def check_bw(s, credentials):
     else:
         soup = BeautifulSoup(r.text, 'html.parser')
         # d=soup.find('div', {'id':'legend'})
-        script_element=soup.find_all('script')[-1].contents[0]
+        script_elements=soup.find_all('script')
+        if len(script_elements)>0:
+            script_element=script_elements[-1].contents[0]
+        else:
+            print("Script not found!!")
+            return False
+        table_elements=soup.find_all('div', {'class': 'table-responsive'})
+        user_info={}
+        sessions_info=[]
+        for table_element in table_elements:
+            title=table_element.find("table").find('thead').find("th").getText()
+            table_body=table_element.find("table").find('tbody')
+            if title=="اطلاعات کاربری":
+                for tr in table_body.find_all("tr"):
+                    all_trs=tr.find_all("td")
+                    key=all_trs[0].getText()
+                    val=all_trs[1].getText()
+                    if key=="نام کاربری":
+                        val=val.replace(" ", '').replace("\t", "").replace("\n", "")
+                    user_info[key]=val
+            elif title=="زمان لاگین":
+                keys=[ "قطع کردن" if ("قطع" in x.getText() and "کردن" in x.getText()) else x.getText() for x in table_element.find("table").find('thead').find_all("th")]
+                for tr in table_body.find_all("tr"):
+                    session_info={}
+                    for key, td in zip(keys, tr.find_all('td')):
+                        if key=="قطع کردن":
+                            session_info[key]="قطع کردن"
+                            # d={}
+                            # for inp in td.find_all("input"):
+                            #     d[inp.get("name")]=inp.get("value")
+                            # # print(d)
+                            # r=s.post(bw_url.replace("login", "main"), data=d)
+                            # if r.status_code!=200:
+                            #     print("Unable to kill!")
+                            # else:
+                            #     print(r.content)
+                        else:
+                            session_info[key]=td.getText()
+                    disconnect_form = tr.find("form")
+                    all_inputs={x.attrs['name']: x.attrs['value'] for x in disconnect_form.find_all("input")}
+                    all_inputs["disconnect"]=''
+                    session_info["form"]=all_inputs
+                    sessions_info.append(session_info)
+                    
+        username=user_info.get('نام کاربری', None)
+        groupclass=user_info.get('گروه کاربری', '').replace(" ","")
+        for session_info in sessions_info:
+            login_time=session_info.get('زمان لاگین', None)
+            ip=session_info.get('آی پی', None)
+            should_disconnect=False
+            if should_disconnect:
+                r_dis=s.post(bw_url.replace("login", 'main'), data=session_info['form'])
+                print(r_dis)
+
         remaining_data_raw=re.findall('باقی مانده\', value: [0-9]+\.[0-9]*', script_element)[0]
         remaining_data=re.split(' ', remaining_data_raw)[-1]
         t=JalaliDate.today()
@@ -140,9 +225,9 @@ def check_bw(s, credentials):
         else:
             remaining_days=10+t.days_in_month(t.month, t.year)-t.day
         if remaining_days==0:
-            print(f'You have {remaining_data} GB remaining data from now to 23:59 PM')
+            print(f'({username}) You have {remaining_data} GB remaining data from now to 23:59 PM')
         else:
-            print(f'You have {remaining_data} GB remaining data for {remaining_days} days({float(remaining_data)/remaining_days:.2f}  GB per day).')
+            print(f'({username}) You have {remaining_data} GB remaining data for {remaining_days} days({float(remaining_data)/remaining_days:.2f}  GB per day).')
 
 def check_net_sharif_login(s):
     for prefix in ('http://', 'https://'):
@@ -259,19 +344,43 @@ def find_best_interface(interfaces_dict):
                 # This should be a tuple of (address, port). Port 0 means auto-selection.
                 source_address=(i_ip, 0),
             )
-        r=s.get(net2_url.format('status'), timeout=1)
-        if r.status_code==200:
-            return i_name, i_ip
+        try:
+        
+            r=s.get(net2_url.format('status'), timeout=1)
+        
+            if r.status_code==200:
+                return i_name, i_ip
+        except:
+            continue
 
 
 
         
 def main():
     credentials=get_config_credentials()
+
     # interfaces_dict={iname[1]: get_ip_address(iname[1].encode()) for iname in socket.if_nameindex()}
+    # adapters = ifaddr.get_adapters()
+
+    # for adapter in adapters:
+    #     # print("IPs of network adapter " + adapter.nice_name)
+    #     ips =[ip for ip in adapter.ips if ip.is_IPv4]
+    #     if len(ips)>0:
+    #         print(f'{ips[0].nice_name}:{ips[0].ip}')
+
+    # interfaces_dict={adapter.ips[0].nice_name: adapter.ips[0].ip for adapter in adapters if len(adapter.ips)>0}
+    # interfaces_dict={x:netifaces.ifaddresses(x).get(netifaces.AF_INET) for adapter in adapters}
+    # interfaces_dict={k: v[0]['addr'] for k, v in interfaces_dict.items() if v is not None}
     
-    interfaces_dict={x:netifaces.ifaddresses(x).get(netifaces.AF_INET) for x in netifaces.interfaces()}
-    interfaces_dict={k: v[0]['addr'] for k, v in interfaces_dict.items() if v is not None}
+    default_interface=ifcfg.default_interface()["device"]
+    interfaces_dict={name:interface['inet4'] 
+        for name, interface in ifcfg.interfaces().items() if interface['inet4']is not None
+    }
+    interfaces_dict={ name: (interface[0] if len(interface)>0 else None) if  isinstance(interface, list) else interface
+        for name, interface in interfaces_dict.items()
+    }
+
+    isinstance(interfaces_dict['lo'], list)
     interfaces_to_choose=list(interfaces_dict.keys())
     interfaces_to_choose.insert(0,"Auto")
     interfaces_to_choose.insert(1, "Smart")
@@ -282,8 +391,11 @@ def main():
     parser.add_argument("-c", "--Check", help = "Check Account Balance", action = "store_true")
     parser.add_argument("-f", "--ForceLogin", action = "store_true", help = "Force Login(Logout from all other devices and login this device")
     parser.add_argument("-x", "--Disconnect-All",action = "store_true" , help = "Disconnect from All Devices")
-    parser.add_argument("-i", "--Interface", help = "Interface Name", default='Smart', choices=interfaces_to_choose)
+    parser.add_argument("-i", "--Interface", help = "Interface Name[Default Smart]", default='Smart', choices=interfaces_to_choose)
     parser.add_argument("-v", "--Verbose", help = "Verbose", action = "store_true")
+    parser.add_argument("-a", "--Account", help = "Select Account", default=next(iter(credentials)))
+    parser.add_argument("-A", "--Add-New-Account", help = "Add new Account", action = "store_true")
+    parser.add_argument("-l", "--List-Accounts", help = "List Accounts", action = "store_true")
     args= parser.parse_args()
     
     interface_ip = ''
@@ -295,7 +407,21 @@ def main():
         interface_ip=interfaces_dict[args.Interface]
 
     s=init_requests_session(interface_ip)
-    if args.Disconnect:
+    if args.Verbose:
+        print(f"Using {args.Account} account")
+    
+    # credentials=credentials[args.Account]
+    account_match=list(credentials.keys())
+    scores=[(account, fuzz.ratio(args.Account, account)) for account in account_match]
+    scores.sort(key=lambda x: x[1], reverse=True)
+    sorted_credentials=[name[0] for name in scores]
+    credentials=credentials[sorted_credentials[0]]
+    if args.List_Accounts:
+        for ac in sorted_credentials:
+            print(ac)
+    elif args.Add_New_Account:
+        append_new_user()
+    elif args.Disconnect:
         args.Connect=False
         logout(s)
     elif args.Check:

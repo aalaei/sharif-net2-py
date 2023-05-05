@@ -1,0 +1,38 @@
+name: Package Application
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOs-latest]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Package Application-linux
+      uses: JackMcKew/pyinstaller-action-linux@main
+      with:
+        path: src
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: net2_lin
+        path: src/dist/linux
+
+    - name: Package Application-win
+      uses: JackMcKew/pyinstaller-action-windows@main
+      with:
+        path: src
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: net2_win
+        path: src/dist/windows
