@@ -5,8 +5,8 @@ requests
 pytz
 dnspython
 pyinstaller
-pywin32
-pypiwin32
+# pywin32
+# pypiwin32
 Pillow
 stdiomask
 ifaddr
