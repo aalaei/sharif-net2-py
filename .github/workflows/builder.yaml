@@ -34,33 +34,36 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: net2_ubuntu-latest
-          path: ./net2_ubuntu-latest
-
+          path: ./net2_ubuntu
       - name: Download Windows binary from build
         uses: actions/download-artifact@v3
         with:
           name: net2_windows-latest
-          path: ./net2_windows-latest
+          path: ./net2_windows
 
       - name: Download Mac binary from build
         uses: actions/download-artifact@v3
         with:
           name: net2_macOs-latest
-          path: ./net2_macOs-latest
+          path: ./net2_macOs
 
-      - run: ls -lh ./
-      # - name: make release
-      #   uses: ncipollo/release-action@v1
-      #   with:
-      #     artifacts: "net2_*"
-      #     bodyFile: "body.md"
-
-      - name: make release
-        uses: marvinpinto/action-automatic-releases@latest
+      - name: Create release
+        uses: Roang-zero1/github-create-release-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload release artifacts
+        uses: Roang-zero1/github-upload-release-artifacts-action@v2
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
-          prerelease: true
-          title: "Development Build"
-          files: |
-            net2_*
+          args: "net2_*"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # - name: make release
+      #   uses: marvinpinto/action-automatic-releases@latest
+      #   with:
+      #     repo_token: "${{ secrets.GITHUB_TOKEN }}"
+      #     automatic_release_tag: "latest"
+      #     prerelease: true
+      #     title: "Development Build"
+      #     files: |
+      #       net2_*
