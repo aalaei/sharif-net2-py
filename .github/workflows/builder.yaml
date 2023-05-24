@@ -44,7 +44,7 @@ jobs:
         with:
           name: net2_macOs-latest
           
-      - run: mkdir -p final && cd dist/ && name=`ls con*`;cp ${name} ../final/$name${matrix.os}
+      # - run: mkdir -p final && cd dist/ && name=`ls con*`;cp ${name} ../final/$name${matrix.os}
       - uses: "marvinpinto/action-automatic-releases@latest"
           with:
             repo_token: "${{ secrets.GITHUB_TOKEN }}"
@@ -52,4 +52,4 @@ jobs:
             prerelease: true
             title: "Development Build_${{matrix.os}}"
             files: |
-              final/*
+              dist/*
