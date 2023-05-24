@@ -361,24 +361,30 @@ def help():
 
 def find_best_interface(interfaces_dict):
     s=init_requests_session()
-    for i_name, i_ip in interfaces_dict.items():
-        if i_name=="lo" or i_name.startswith('docker') or i_ip is None:
-            continue
-        for prefix in ('http://', 'https://'):
-            s.get_adapter(prefix).init_poolmanager(
-                # those are default values from HTTPAdapter's constructor
-                connections=requests.adapters.DEFAULT_POOLSIZE,
-                maxsize=requests.adapters.DEFAULT_POOLSIZE,
-                # This should be a tuple of (address, port). Port 0 means auto-selection.
-                source_address=(i_ip, 0),
-            )
-        try:
-            r=s.get(net2_url.format('status'), timeout=1)
-            if r.status_code==200:
-                return i_name, i_ip
-        except Exception as e:
-            print(e.args[0])
-            continue
+    try:
+        r=s.get(net2_url.format('status'), timeout=1)
+        if r.status_code==200:
+            return ("direct", "0.0.0.0")
+    except:
+        for i_name, i_ip in interfaces_dict.items():
+            if i_name=="lo" or i_name.startswith('docker') or i_ip is None:
+                continue
+            for prefix in ('http://', 'https://'):
+                s.get_adapter(prefix).init_poolmanager(
+                    # those are default values from HTTPAdapter's constructor
+                    connections=requests.adapters.DEFAULT_POOLSIZE,
+                    maxsize=requests.adapters.DEFAULT_POOLSIZE,
+                    # This should be a tuple of (address, port). Port 0 means auto-selection.
+                    source_address=(i_ip, 0),
+                )
+            try:
+                r=s.get(net2_url.format('status'), timeout=1)
+                if r.status_code==200:
+                    return i_name, i_ip
+            except Exception as e:
+                # print(e.args[0])
+                continue
+            return ("default", "0.0.0.0")
 
 
 
@@ -399,7 +405,8 @@ def main():
     # interfaces_dict={x:netifaces.ifaddresses(x).get(netifaces.AF_INET) for adapter in adapters}
     # interfaces_dict={k: v[0]['addr'] for k, v in interfaces_dict.items() if v is not None}
     
-    default_interface=ifcfg.default_interface()["device"]
+    # default_interface=ifcfg.default_interface()["device"]
+    
     interfaces_dict={name:interface['inet4'] 
         for name, interface in ifcfg.interfaces().items() if interface['inet4']is not None
     }
@@ -407,7 +414,6 @@ def main():
         for name, interface in interfaces_dict.items()
     }
 
-    isinstance(interfaces_dict['lo'], list)
     interfaces_to_choose=list(interfaces_dict.keys())
     interfaces_to_choose.insert(0,"Auto")
     interfaces_to_choose.insert(1, "Smart")
