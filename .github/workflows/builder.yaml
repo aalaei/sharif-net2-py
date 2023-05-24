@@ -53,4 +53,4 @@ jobs:
           prerelease: true
           title: "Development Build"
           files: |
-            dist/*
+            net2_*
