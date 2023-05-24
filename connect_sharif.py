@@ -34,7 +34,7 @@ net_headers = {
 
 _orig_create_connection = connection.create_connection
 
-def your_dns_resolver(host):
+def custom_dns_resolver(host):
     if host == 'net2.sharif.edu':
         return '172.17.1.214'
     try:
@@ -55,7 +55,7 @@ def patched_create_connection(address, *args, **kwargs):
     # resolve hostname to an ip address; use your own
     # resolver here, as otherwise the system resolver will be used.
     host, port = address
-    hostname = your_dns_resolver(host)
+    hostname = custom_dns_resolver(host)
 
     return _orig_create_connection((hostname, port), *args, **kwargs)
 
@@ -122,10 +122,12 @@ def append_new_user(config_file_name='pass.json', _user=None, _pass=None):
         print("append failed!")
     return credentials
 
-def login(s, credentials):
+def check_net2_connection(s, verbose=True):
     r=s.get(net2_url.format('status'))
     if r.status_code!=200:
-        print("Not connected!")
+        if verbose:
+            print("Not connected!")
+        return None
     else:
         soup = BeautifulSoup(r.text, 'html.parser')
         try:
@@ -138,21 +140,31 @@ def login(s, credentials):
                 tds=tr.find_all('td')
                 dict_info[tds[0].getText().replace(":", "")]=tds[1].getText()
         page_title=soup.title.contents[0]
-        if page_title=="logout":
-            print("Already Connected!")
-            for info, info_val in dict_info.items():
-                print(f'{info}: {info_val}')
+        if "logout" in page_title:
+            if verbose:
+                print("Already Connected!")
+                for info, info_val in dict_info.items():
+                    print(f'{info}: {info_val}')
+            return dict_info
         else:
-            r2=s.post(net2_url.format('login'), data=credentials)
-            if r2.status_code!=200:
-                print("Not able to login!")
-            else:
-                soup2 = BeautifulSoup(r2.text, 'html.parser')
-                page_title2=soup2.title.contents[0]
-                if 'mikrotik' in page_title2:
-                    print('Done :)')
-                else:
-                    print("Incorrect password")
+            return {}
+
+def login(s, credentials):
+    dict_info=check_net2_connection(s, verbose=True)
+    if dict_info is None:
+        return None
+    elif dict_info!={}:
+        return "Already Done"
+    r2=s.post(net2_url.format('login'), data=credentials)
+    if r2.status_code!=200:
+        print("Not able to login!")
+    else:
+        soup2 = BeautifulSoup(r2.text, 'html.parser')
+        page_title2=soup2.title.contents[0]
+        if 'mikrotik' in page_title2:
+            print('Done :)')
+        else:
+            print("Incorrect password")
 
 def check_bw(s, credentials):
     c={'normal_username': credentials['username'], 'normal_password': credentials['password']}
@@ -209,14 +221,7 @@ def check_bw(s, credentials):
                     
         username=user_info.get('نام کاربری', None)
         groupclass=user_info.get('گروه کاربری', '').replace(" ","")
-        # for session_info in sessions_info:
-        #     login_time=session_info.get('زمان لاگین', None)
-        #     ip=session_info.get('آی پی', None)
-        #     should_disconnect=False
-        #     if should_disconnect:
-        #         r_dis=s.post(bw_url.replace("login", 'main'), data=session_info['form'])
-        #         print(r_dis)
-
+        
         remaining_data_raw=re.findall('باقی مانده\', value: [0-9]+\.?[0-9]*', script_element)[0]
         remaining_data=re.split(' ', remaining_data_raw)[-1]
         t=JalaliDate.today()
@@ -236,6 +241,7 @@ def check_bw(s, credentials):
             ip=session_info.get('آی پی', None)
             dict_params=session_info.get('form', None)
             print(f"\t{i}- IP: {ip}, LogInTime: {login_time}, \n\t\t({dict_params})")
+        return sessions_info
             
 
 def check_net_sharif_login(s):
@@ -250,6 +256,19 @@ def check_net_sharif_login(s):
 
     r3=s.get(f'{net_url}/en-us/user/get_info_user/', verify=False, headers=net_headers)
     return len(r3.text)>0
+
+def disconnect_net(s, credentials):
+    # net_sharif(s, credentials)
+    sessions_info=check_bw(s, credentials)
+    for session_info in sessions_info:
+            login_time=session_info.get('زمان لاگین', None)
+            ip=session_info.get('آی پی', None)
+            should_disconnect=True
+            if should_disconnect:
+                r_dis=s.post(bw_url.replace("login", 'main'), data=session_info['form'])
+                print(r_dis)
+
+
 
 def net_sharif(s, credentials):
     cookie_file = 'somefile'
@@ -437,10 +456,10 @@ def main():
     elif args.Check:
         check_bw(s,credentials)
     elif args.ForceLogin:
-        net_sharif(s,credentials)
+        disconnect_net(s,credentials)
         login(s,credentials)
     elif args.Disconnect_All:
-        net_sharif(s,credentials)
+        disconnect_net(s,credentials)
     elif args.Connect:
         login(s,credentials)
     else:

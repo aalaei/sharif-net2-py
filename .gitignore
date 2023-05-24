@@ -1,5 +1,6 @@
 .vscode/
 venv/
+env/
 pass.json
 # Distribution / packaging
 .Python
