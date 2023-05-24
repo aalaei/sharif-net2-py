@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+  name: Build
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
@@ -38,12 +39,12 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: net2_windows-latest
-      
+
       - name: Download Mac binary from build
         uses: actions/download-artifact@v3
         with:
           name: net2_macOs-latest
-          
+
       - uses: "marvinpinto/action-automatic-releases@latest"
           with:
             repo_token: "${{ secrets.GITHUB_TOKEN }}"
