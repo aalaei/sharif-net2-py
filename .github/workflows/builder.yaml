@@ -45,11 +45,12 @@ jobs:
         with:
           name: net2_macOs-latest
 
-      - uses: "marvinpinto/action-automatic-releases@latest"
+      - name: make release
+        uses: marvinpinto/action-automatic-releases@latest
           with:
             repo_token: "${{ secrets.GITHUB_TOKEN }}"
             automatic_release_tag: "latest"
             prerelease: true
-            title: "Development Build_${{matrix.os}}"
+            title: "Development Build"
             files: |
               dist/*
