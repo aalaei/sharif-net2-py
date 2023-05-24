@@ -45,6 +45,8 @@ jobs:
         with:
           name: net2_macOs-latest
           path: ./net2_macOs
+      
+      - run: ls -la ./net2_ubuntu
 
       - uses: ncipollo/release-action@v1
         with:
