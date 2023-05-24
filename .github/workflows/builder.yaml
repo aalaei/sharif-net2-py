@@ -46,11 +46,11 @@ jobs:
           name: net2_macOs-latest
           path: ./net2_macOs
       
-      - run: ls -la ./net2_ubuntu
+      - run: mkdir -p final && cp net2_ubuntu/connect_sharif final/net2_lin && cp net2_windows/connect_sharif.exe final/net2_win.exe && cp net2_macOs/connect_sharif final/net2_mac
 
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: "net2_*"
+          artifacts: "final/net2_*"
 
       # - name: Create release
       #   uses: Roang-zero1/github-create-release-action@v2
