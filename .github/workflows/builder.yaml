@@ -14,13 +14,43 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v3
       with:
         python-version: '3.8'
 
     - run: pip install -r src/requirements.txt
     - run: pyinstaller src/build.spec
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: net2_${{matrix.os}}
         path: dist/*
+  pack:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download linux binary from build
+        uses: actions/download-artifact@v3
+        with:
+          name: net2_ubuntu-latest
+
+      - name: Download Windows binary from build
+        uses: actions/download-artifact@v3
+        with:
+          name: net2_windows-latest
+      
+      - name: Download Mac binary from build
+        uses: actions/download-artifact@v3
+        with:
+          name: net2_macOs-latest
+          
+      - run: mkdir -p final && cd dist/ && name=`ls con*`;cp ${name} ../final/$name${{matrix.os}}
+    
+      - uses: "marvinpinto/action-automatic-releases@latest"
+          with:
+            repo_token: "${{ secrets.GITHUB_TOKEN }}"
+            automatic_release_tag: "latest"
+            prerelease: true
+            title: "Development Build_${{matrix.os}}"
+            files: |
+              final/*
