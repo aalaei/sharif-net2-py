@@ -14,10 +14,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        node-version: '16.x'
     - uses: actions/setup-python@v2
       with:
         python-version: '3.8'
-        node-version: '16.x'
 
     - run: pip install -r src/requirements.txt
     - run: pyinstaller src/build.spec
