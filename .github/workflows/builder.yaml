@@ -7,7 +7,6 @@ on:
 
 jobs:
   build:
-  name: Build
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
@@ -26,6 +25,7 @@ jobs:
         name: net2_${{matrix.os}}
         path: dist/*
   pack:
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
