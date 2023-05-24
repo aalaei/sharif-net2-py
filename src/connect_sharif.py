@@ -217,7 +217,7 @@ def check_bw(s, credentials):
         #         r_dis=s.post(bw_url.replace("login", 'main'), data=session_info['form'])
         #         print(r_dis)
 
-        remaining_data_raw=re.findall('باقی مانده\', value: [0-9]+\.[0-9]*', script_element)[0]
+        remaining_data_raw=re.findall('باقی مانده\', value: [0-9]+\.?[0-9]*', script_element)[0]
         remaining_data=re.split(' ', remaining_data_raw)[-1]
         t=JalaliDate.today()
         if t.day < 10:
@@ -343,7 +343,7 @@ def help():
 def find_best_interface(interfaces_dict):
     s=init_requests_session()
     for i_name, i_ip in interfaces_dict.items():
-        if i_name=="lo" or i_name.startswith('docker'):
+        if i_name=="lo" or i_name.startswith('docker') or i_ip is None:
             continue
         for prefix in ('http://', 'https://'):
             s.get_adapter(prefix).init_poolmanager(
@@ -354,12 +354,11 @@ def find_best_interface(interfaces_dict):
                 source_address=(i_ip, 0),
             )
         try:
-        
             r=s.get(net2_url.format('status'), timeout=1)
-        
             if r.status_code==200:
                 return i_name, i_ip
-        except:
+        except Exception as e:
+            print(e.args[0])
             continue
 
 
