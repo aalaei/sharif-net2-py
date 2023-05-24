@@ -18,10 +18,9 @@ jobs:
       with:
         python-version: '3.8'
 
-    - run: cd src/
-    - run: pip install -r requirements.txt
-    - run: pyinstaller build.spec
+    - run: pip install -r src/requirements.txt
+    - run: pyinstaller src/build.spec
     - uses: actions/upload-artifact@v2
       with:
         # name: net2_${{matrix.os}}
-        path: dist/*
+        path: src/dist/*
