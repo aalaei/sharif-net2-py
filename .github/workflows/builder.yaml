@@ -23,5 +23,5 @@ jobs:
     - run: pyinstaller src/build.spec
     - uses: actions/upload-artifact@v2
       with:
-        # name: net2_${{matrix.os}}
+        name: net2_${{matrix.os}}
         path: dist/*
