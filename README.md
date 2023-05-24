@@ -3,20 +3,25 @@
 A simple python script for sharif net2 system
 
 ## Download Latest Built binary
-Linux:
+### Linux:
 ```bash
-curl -sL https://github.com/aalaei/sharif-net2-py/releases/latest/download/net2_lin > /usr/bin/net2
+mkdir -p ~/.local/bin/
+export PATH=$PATH:~/.local/bin/
+curl -sL https://github.com/aalaei/sharif-net2-py/releases/latest/download/net2_lin > ~/.local/bin/net2
+chmod +x ~/.local/bin/net2
 ```
+you may need to add `export PATH=$PATH:~/.local/bin/` to your .bashrc or .zshrc
 
-Windows:
+### Windows:
 ```cmd
 curl -sL -o net2.exe https://github.com/aalaei/sharif-net2-py/releases/latest/download/net2_win
 ... add path environment variable
 ```
 
-Mac:
+### Mac:
 ```bash
 curl -sL -o net2 https://github.com/aalaei/sharif-net2-py/releases/latest/download/net2_mac
+chmod +x net2
 ... add path environment variable
 ```
 
