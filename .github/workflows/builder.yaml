@@ -45,7 +45,7 @@ jobs:
         with:
           name: net2_macOs-latest
 
-      - run: ls -lh dist/
+      - run: ls -lh ./
       - name: make release
         uses: marvinpinto/action-automatic-releases@latest
         with:
