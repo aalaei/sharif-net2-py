@@ -46,16 +46,20 @@ jobs:
           name: net2_macOs-latest
           path: ./net2_macOs
 
-      - name: Create release
-        uses: Roang-zero1/github-create-release-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload release artifacts
-        uses: Roang-zero1/github-upload-release-artifacts-action@v2
+      - uses: ncipollo/release-action@v1
         with:
-          args: "net2_*"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "net2_*"
+
+      # - name: Create release
+      #   uses: Roang-zero1/github-create-release-action@v2
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Upload release artifacts
+      #   uses: Roang-zero1/github-upload-release-artifacts-action@v2
+      #   with:
+      #     args: "net2_*"
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # - name: make release
       #   uses: marvinpinto/action-automatic-releases@latest
