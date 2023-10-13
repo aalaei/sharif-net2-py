@@ -426,7 +426,12 @@ def net_sharif(s, credentials):
         url=f'{net_url}/en-us/user/disconnect/?user_id={user_id}&ras={ras}&ip={ip}&u_id={u_id}'
         s.get(url, verify=False, headers=net_headers)
 
-def logout(s):
+def logout(s, force = False):
+    dict_info=check_net2_connection(s, verbose=False)
+    if dict_info is None or dict_info=={}:
+        print("Already Logged out!")
+        if not force:
+            return
     r=s.get(net2_url.format('logout'))
     if r.status_code!=200:
         print("Not connected!")
@@ -537,7 +542,7 @@ def main():
         delete_account(args.Delete_Account)
     elif args.Disconnect:
         args.Connect=False
-        logout(s)
+        logout(s, force= args.ForceLogin)
     elif args.Check:
         check_bw(s,credentials)
     elif args.ForceLogin:
