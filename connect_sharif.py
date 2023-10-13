@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import requests
 import json
 import os
+import base64
 import sys
 import time
 from PIL import Image
@@ -88,12 +89,25 @@ def go_to_app_dir(config_file_name='pass.json'):
     dname = os.path.dirname(config_file_name)
     os.chdir(dname)
 
+def try_base64(file_content):
+    format="plain"
+    try:
+        file_content=base64.b64decode(file_content.encode()).decode()
+        format="base64"
+    except Exception as e:
+        print("Warning: Credentials are stored as plain text, try to hide them using 'net2 -H'")
+    return file_content, format
 def get_config_credentials(config_file_name='pass.json'):
     go_to_app_dir(config_file_name)
     try:
         with open(config_file_name) as f:
             file_content=f.read()
-            credentials = json.loads(file_content)
+            file_content, _=try_base64(file_content)
+            try:
+                credentials = json.loads(file_content)
+            except Exception as e:
+                print("Error: Unable to Parse Credentials")
+                sys.exit(-1)
     except FileNotFoundError:
         print('Credentials file not found.')
         username, password=get_user_pass_from_input()
@@ -107,20 +121,75 @@ def get_user_pass_from_input():
     password = stdiomask.getpass(prompt = 'Please enter your password: ')
     return username, password
 
-def append_new_user(config_file_name='pass.json', _user=None, _pass=None):
-    if _user is None and _pass is None:
-        _user, _pass = get_user_pass_from_input()
+def manipulate_account(fnc, config_file_name='pass.json'):
     credentials=None
     try:
         with open(config_file_name, 'r') as f:
             file_content=f.read()
+            file_content, format=try_base64(file_content)
             credentials = json.loads(file_content)
-            credentials[_user] = {'username': _user, 'password': _pass}
+            credentials=fnc(credentials)
             with open(config_file_name, 'w') as f2:
-                json.dump(credentials, f2)
-    except:
-        print("append failed!")
+                cr_str = json.dumps(credentials)
+                if format == "base64":
+                    cr_str = base64.b64encode(cr_str.encode()).decode()
+                f2.write(cr_str)
+    except FileExistsError:
+        print("Credentials file not found")
     return credentials
+
+def append_new_account(config_file_name='pass.json', _user=None, _pass=None):
+    if _user is None and _pass is None:
+        _user, _pass = get_user_pass_from_input()
+    try:
+        def fnc(credentials):
+            credentials[_user] = {'username': _user, 'password': _pass}
+            return credentials
+        manipulate_account(fnc, config_file_name)   
+    except Exception as e:
+        print("Append failed!", e)
+    
+def delete_account(user, config_file_name='pass.json'):
+    if user=="":
+        user = input("Please enter username you want to delete: ")
+    credentials=None
+    try:
+        def del_fnc(credentials):
+            del credentials[user]
+            return credentials
+        inp=""
+        while not(inp.lower() == "y" or inp.lower() == "n"):
+            inp=input(f"Are you sure you want to delete '{user}' (y/n)? ")
+        if inp.lower()=="y":
+            manipulate_account(del_fnc, config_file_name)
+            print(f"'{user}' was deleted successfully")
+    except Exception as e:
+        print("Failed to delete specified account! ", e)
+    return credentials
+
+def hide_credentials(config_file_name='pass.json'):
+    try:
+        with open(config_file_name, 'r') as f:
+            file_content=f.read()
+            format="plain"
+            try:
+                file_content=base64.b64decode(file_content.encode()).decode()
+                format="base64"
+            except:
+                pass
+            try:
+                credentials = json.loads(file_content)
+            except:
+                print("Error parsing config")
+                return
+            if format=="base64":
+                print("Already Hidden!")
+                return
+            with open(config_file_name, 'w') as f2:
+                f2.write(base64.b64encode(json.dumps(credentials).encode()).decode())
+                print("Credentials are hidden now!")
+    except Exception as e:
+        print("Hiding credentials failed! ", e)
 
 def check_net2_connection(s, verbose=True):
     r=s.get(net2_url.format('status'))
@@ -164,7 +233,7 @@ def login(s, credentials):
         if 'mikrotik' in page_title2:
             print('Done :)')
         else:
-            print("Incorrect password")
+            print("Incorrect password or low balance!")
 
 def check_bw(s, credentials):
     c={'normal_username': credentials['username'], 'normal_password': credentials['password']}
@@ -356,16 +425,14 @@ def logout(s):
         print("Not connected!")
     else:
             print("Successfully disconnected :)")
-def help():
-    print('\th\tHelp\n\tf\tForceLogin\n\tc\tCheck Account\n\td\tDisconnect(Logout)\n\tx\tDisconnect All Devices')
 
 def find_best_interface(interfaces_dict):
     s=init_requests_session()
     try:
-        r=s.get(net2_url.format('status'), timeout=1)
-        if r.status_code==200:
+        r=s.get(net2_url.format('status'), timeout=2)
+        if r.status_code==200 or r.status_code==302:
             return ("direct", "0.0.0.0")
-    except:
+    except Exception as e:
         for i_name, i_ip in interfaces_dict.items():
             if i_name=="lo" or i_name.startswith('docker') or i_ip is None:
                 continue
@@ -379,18 +446,17 @@ def find_best_interface(interfaces_dict):
                 )
             try:
                 r=s.get(net2_url.format('status'), timeout=1)
-                if r.status_code==200:
+                if r.status_code==200 or r.status_code==302:
                     return i_name, i_ip
             except Exception as e:
                 # print(e.args[0])
                 continue
             return ("default", "0.0.0.0")
 
-
-
         
 def main():
     credentials=get_config_credentials()
+    account_list=list(credentials.keys())
 
     # interfaces_dict={iname[1]: get_ip_address(iname[1].encode()) for iname in socket.if_nameindex()}
     # adapters = ifaddr.get_adapters()
@@ -428,7 +494,9 @@ def main():
     parser.add_argument("-v", "--Verbose", help = "Verbose", action = "store_true")
     parser.add_argument("-a", "--Account", help = "Select Account", default=next(iter(credentials)))
     parser.add_argument("-A", "--Add-New-Account", help = "Add new Account", action = "store_true")
+    parser.add_argument("-D", "--Delete-Account", help = "Delete Specified Account", default= "_", choices=account_list)
     parser.add_argument("-l", "--List-Accounts", help = "List Accounts", action = "store_true")
+    parser.add_argument("-H", "--Hide-Credentials", help = "Hide Credentials", action = "store_true")
     
     args= parser.parse_args()
     
@@ -442,7 +510,6 @@ def main():
 
     s=init_requests_session(interface_ip)
     
-    
     # credentials=credentials[args.Account]
     account_match=list(credentials.keys())
     scores=[(account, fuzz.ratio(args.Account, account)) for account in account_match]
@@ -451,11 +518,16 @@ def main():
     if args.Verbose:
         print(f"Using {sorted_credentials[0]} account")
     credentials=credentials[sorted_credentials[0]]
+    if args.Hide_Credentials:
+        hide_credentials()
+        return
     if args.List_Accounts:
         for ac in sorted_credentials:
             print(ac)
     elif args.Add_New_Account:
-        append_new_user()
+        append_new_account()
+    elif args.Delete_Account!="_":
+        delete_account(args.Delete_Account)
     elif args.Disconnect:
         args.Connect=False
         logout(s)
@@ -469,7 +541,7 @@ def main():
     elif args.Connect:
         login(s,credentials)
     else:
-        help()
+        parser.print_help()
         time.sleep(1)
 
 if __name__ == '__main__':
