@@ -191,7 +191,7 @@ def hide_credentials(config_file_name='pass.json'):
     except Exception as e:
         print("Hiding credentials failed! ", e)
 
-def check_net2_connection(s, verbose=True):
+def check_net2_connection(s, verbose=True, print_already=True):
     r=s.get(net2_url.format('status'))
     if r.status_code!=200:
         if verbose:
@@ -211,14 +211,15 @@ def check_net2_connection(s, verbose=True):
         page_title=soup.title.contents[0]
         if "logout" in page_title:
             if verbose:
-                print("Already Connected!")
+                if print_already:
+                    print("Already Connected!")
                 for info, info_val in dict_info.items():
                     print(f'{info}: {info_val}')
             return dict_info
         else:
             return {}
 
-def login(s, credentials):
+def login(s, credentials, verbose=True):
     dict_info=check_net2_connection(s, verbose=True)
     if dict_info is None:
         return None
@@ -232,6 +233,12 @@ def login(s, credentials):
         page_title2=soup2.title.contents[0]
         if 'mikrotik' in page_title2:
             print('Done :)')
+            if verbose:
+                try:
+                    s2=init_requests_session()            
+                    check_net2_connection(s2, verbose=True, print_already=False)
+                except:
+                    pass
         else:
             print("Incorrect password or low balance!")
 
@@ -535,11 +542,11 @@ def main():
         check_bw(s,credentials)
     elif args.ForceLogin:
         disconnect_net(s,credentials)
-        login(s,credentials)
+        login(s,credentials, verbose=args.Verbose)
     elif args.Disconnect_All:
         disconnect_net(s,credentials)
     elif args.Connect:
-        login(s,credentials)
+        login(s,credentials, verbose=args.Verbose)
     else:
         parser.print_help()
         time.sleep(1)
