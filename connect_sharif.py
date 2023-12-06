@@ -43,6 +43,8 @@ def custom_dns_resolver(host):
         my_resolver.nameservers = [
                 '81.31.160.34', # NOTE: NS1 sharif
                 '81.31.160.35', # NOTE: NS2 sharif
+                '172.26.146.34', # NOTE: NS1 net2 sharif
+                '172.26.146.35', # NOTE: NS2 net2 sharif
                 '208.67.222.222', # NOTE: OpenDNS
                 '8.8.8.8'         # NOTE: Google
         ]
