@@ -514,7 +514,11 @@ def main():
     
     interface_ip = ''
     if args.Interface=="Smart":
-        name, interface_ip = find_best_interface(interfaces_dict)
+        try:
+            name, interface_ip = find_best_interface(interfaces_dict)
+        except:
+            print("Unable to Find best interface!")
+            sys.exit(-1)
         if args.Verbose:
             print(f"Best Interface: {name}({interface_ip})")
     elif args.Interface!="Auto":
